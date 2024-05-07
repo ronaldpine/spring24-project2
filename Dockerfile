@@ -18,4 +18,5 @@ RUN apt-get install --yes --no-install-recommends \
     iptables \
     pkg-config \
     python3 \
-    python3-pip
+    python3-pip \
+    libssl-dev
