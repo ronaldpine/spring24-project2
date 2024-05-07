@@ -1,10 +1,10 @@
-CC=gcc
-CFLAGS=-I.
+CC=g++
+CFLAGS=-I. -lcrypto
 DEPS=
 OBJ=server.o
 USERID=123456789
 
-%.o: %.c $(DEPS)
+%.o: %.cpp $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 all: server
