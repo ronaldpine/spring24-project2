@@ -1,6 +1,6 @@
-# CS118 Project 0
+# CS118 Project 2
 
-This is the repo for spring23 cs118 project 0.
+This is the repo for spring24 cs118 project 2.
 
 ## Academic Integrity Note
 
