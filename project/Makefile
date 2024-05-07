@@ -1,19 +1,19 @@
-CC=g++
-CFLAGS=-I. -lcrypto
+CXX=g++
+CXXFLAGS=-I. -lcrypto -Wno-deprecated-declarations
 DEPS=crypto-helpers.cpp
 USERID=123456789
 
 HELPER_SRCS=$(wildcard helpers/*.cpp)
 
 %.o: %.cpp $(DEPS)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CXX) -c -o $@ $(CXXFLAGS)
 
 all: server client
 server: server.o $(HELPER_SRCS:.cpp=.o)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CXX) -o $@ $^ $(CXXFLAGS)
 
 client: client.o $(HELPER_SRCS:.cpp=.o)
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CXX) -o $@ $^ $(CXXFLAGS)
 
 clean:
 	rm -rf *.o helpers/*.o server client *.tar.gz
