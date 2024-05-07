@@ -1,9 +1,9 @@
 CXX=g++
 CXXFLAGS=-I. -lcrypto -Wno-deprecated-declarations
-DEPS=crypto-helpers.cpp
 USERID=123456789
 
 HELPER_SRCS=$(wildcard helpers/*.cpp)
+DEPS=$(HELPER_SRCS:.cpp=.d)
 
 %.o: %.cpp $(DEPS)
 	$(CXX) -c -o $@ $(CXXFLAGS)
