@@ -1,6 +1,6 @@
 .idea
 
-/project/*.o
-/project/*.dSYM
+*.o
+*.dSYM
 /project/server
 /project/client

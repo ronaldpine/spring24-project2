@@ -8,6 +8,7 @@
 
 #include <cstring>
 #include <memory>
+#include <iostream>
 
 namespace cs118 {
 
@@ -62,7 +63,7 @@ ECDHState::getSelfPrvKey()
   int derLen = i2d_ECPrivateKey(m_eckey, &derEncoded);
   m_prvKey.resize(derLen);
   std::memcpy(m_prvKey.data(), derEncoded, derLen);
-  return m_prvKey; 
+  return m_prvKey;
 }
 
 const std::vector<uint8_t>&
@@ -96,6 +97,12 @@ ECDHState::sign(const std::vector<uint8_t>& data, std::vector<uint8_t>& signatur
     BN_bn2bin(r, signature_bytes.data());
     BN_bn2bin(s, signature_bytes.data() + rLen);
     ECDSA_SIG_free(signature);
+}
+
+bool
+ECDHState::verify(const std::vector<uint8_t>& data, const std::vector<uint8_t>& signature,
+                  const std::vector<uint8_t>& peerKey) {
+    return true;
 }
 
 } // namespace cs118

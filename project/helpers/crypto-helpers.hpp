@@ -37,27 +37,4 @@ private:
   std::vector<uint8_t> m_secret;
 };
 
-
-size_t
-hkdf(const uint8_t* secret, size_t secretLen,
-     const uint8_t* salt, size_t saltLen,
-     uint8_t* output, size_t outputLen,
-     const uint8_t* info = nullptr, size_t infoLen = 0);
-
-
-void
-hmacSha256(const uint8_t* data, size_t dataLen,
-           const uint8_t* key, size_t keyLen,
-           uint8_t* result);
-
-void
-aesCbc256Encrypt(uint8_t* plaintext, int plaintextLen,
-                 const uint8_t* key, const uint8_t* iv,
-                 uint8_t* ciphertext, int* ciphertextLen);
-
-void
-aesCbc256Decrypt(const uint8_t* ciphertext, int ciphertextLen,
-                 const uint8_t* key, const uint8_t* iv,
-                 uint8_t* plaintext, int* plaintextLen);
-
 } // namespace cs118
