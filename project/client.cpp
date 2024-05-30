@@ -4,9 +4,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <csignal> // Used for SIGINT
 #include <fcntl.h> // Used for non-blocking
 
 using namespace std;
+volatile sig_atomic_t status = 1;
 
 void cleanup(int sockfd){
   close(sockfd);
@@ -32,18 +34,47 @@ void retransmit(){
   return;
 }
 
+void timeout(){
+  exit(3);
+}
+
+void sig(int signal){
+  status = 0;
+}
 
 int main(int argc, char *argv[])
 {
+
+  // Check for valid amount of arguments passed in
+  if(argc != 5){
+    // Not sure about this return code
+    return -1;
+  }
+
+
+   // Parse the arguments from the command typed in
+  int securityFlag = stoi(argv[1]);
+  string host = argv[2];
+  int PORT = stoi(argv[3]);
+  string pubKey = argv[4];
+
 
   // Last ACKed packet
   int lastAck = 1; 
   // Last sent packet
   int lastSentPacket = 1;
 
+  // Used to handle SIGINT
+  signal(SIGINT,sig);
+
 
   // Create socket
   int sockfd = socket(AF_INET, SOCK_DGRAM,0);
+
+  // If socket wasn't created properly
+  if(sockfd < 0){
+    exit(errno);
+  }
 
   // Set up flags so the sokcet is nonblocking
   int flags = fcntl(sockfd, F_GETFL);
@@ -56,8 +87,14 @@ int main(int argc, char *argv[])
   serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
 
   // Set receiving port and set byte ordering to Big Endian
-  int PORT = 8080;
+  // int PORT = 8080;
   serverAddress.sin_port = htons(PORT); 
+
+  const int trueFlag = 1;
+  if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof(int)) == -1){
+    // cout << "Flag setting issue" << endl;
+    return errno;
+  }
 
   // send data
   int dataSent = sendData(sockfd, "", serverAddress);
@@ -69,6 +106,24 @@ int main(int argc, char *argv[])
 
 
   // Listen to messages from server
+  while(true){
+    /* 5. Listen for response from server */
+    int bytes_recvd = recvfrom(sockfd, server_buf, BUF_SIZE, 
+                        // socket  store data  how much
+                           0, (struct sockaddr*) &serverAddress, 
+                           &serversize);
+    // If there is data process, else continue
+    if (bytes_recvd <= 0) continue;
+
+    // Else process the data 
+    processData();
+
+    // Check if there need to retransmit
+    retransmit();
+
+    // Print out data
+    write(1, server_buf, bytes_recvd);
+  }
 
   return 0;
 }

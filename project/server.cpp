@@ -3,9 +3,11 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <errno.h>
+#include <csignal> // Used for SIGINT
 #include <fcntl.h> // Used for non-blocking
 
 using namespace std;
+volatile sig_atomic_t status = 1;
 
 void cleanup(int sockfd){
   close(sockfd);
@@ -20,18 +22,41 @@ void retransmit(){
   return;
 }
 
+void sig(int signal){
+  status = 0;
+}
+
 
 int main(int argc, char *argv[])
 {
+
+  // Check for valid amount of arguments passed in
+  if(argc != 5){
+    // Not sure about this return code
+    return -1;
+  }
+
+  // Parse the arguments from the command typed in
+  int securityFlag = stoi(argv[1]);
+  int PORT = stoi(argv[2]);
+  string privKeyFile = argv[3];
+  string certFile = argv[4];
 
   // Last ACKed packet
   int lastAck = 1; 
   // Last sent packet
   int lastSentPacket = 1;
 
+  signal(SIGINT,sig);
+
 
   // Create socket
   int sockfd = socket(AF_INET, SOCK_DGRAM,0);
+  
+  // If socket wasn't created properly
+  if(sockfd < 0){
+    exit(errno);
+  }
 
   // Set up flags so the sokcet is nonblocking
   int flags = fcntl(sockfd, F_GETFL);
@@ -44,9 +69,14 @@ int main(int argc, char *argv[])
   serverAddress.sin_addr.s_addr = INADDR_ANY;
 
   // Set receiving port and set byte ordering to Big Endian
-  int PORT = 8080;
   serverAddress.sin_port = htons(PORT); 
 
+  // Be able to reuse the socket address and port
+  const int trueFlag = 1;
+  if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof(int)) == -1){
+    // cout << "Flag setting issue" << endl;
+    return errno;
+  }
 
   // Bind the socket to the os with server address
   int binded = bind(sockfd, (struct sockaddr*) &serverAddress, 
