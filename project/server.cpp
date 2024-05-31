@@ -6,15 +6,27 @@
 #include <csignal> // Used for SIGINT
 #include <fcntl.h> // Used for non-blocking
 
+// Macros for reliable transport
+#define PAYLOAD_SIZE 1024
+#define HEADER_SIZE 12
+#define PACKET_SIZE (PAYLOAD_SIZE + HEADER_SIZE)
+#define WINDOW_SIZE 20
+
 using namespace std;
 volatile sig_atomic_t status = 1;
+
 
 void cleanup(int sockfd){
   close(sockfd);
   return;
 }
 
-void processData(){
+void processData(struct sockaddr_in clientAddress, char *client_buf){
+  // Inspect client information
+  char* client_ip = inet_ntoa(clientAddress.sin_addr);
+                // "Network bytes to address string"
+  int client_port = ntohs(clientAddress.sin_port); // Little endian
+
   return;
 }
 
@@ -43,9 +55,12 @@ int main(int argc, char *argv[])
   string certFile = argv[4];
 
   // Last ACKed packet
-  int lastAck = 1; 
+  int lastAck = 0; 
+  // Current Ack
+  int currAck = 0;
   // Last sent packet
-  int lastSentPacket = 1;
+  int currPacket = 1;
+  //
 
   signal(SIGINT,sig);
 
@@ -96,9 +111,8 @@ int main(int argc, char *argv[])
 
 
 
-  // Listen to message from clients in non-blocking manner
-
-  while(true){
+  // Listen to message from clients in non-blocking manner, while running
+  while(status == 1){
   // Check for data from client
   int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE,
 	                           0, (struct sockaddr*) &clientAddress, 
@@ -106,18 +120,12 @@ int main(int argc, char *argv[])
 
   // If there is data process, else continue
   if (bytes_recvd <= 0) continue;
+
   // Else process the data 
-  processData();
+  processData(clientAddress, client_buf);
 
   // Check if there need to retransmit
   retransmit();
-
-  
-
-
-
-
-
 
   }
 

@@ -10,6 +10,12 @@
 using namespace std;
 volatile sig_atomic_t status = 1;
 
+// Macros for reliable transport
+#define PAYLOAD_SIZE 1024
+#define HEADER_SIZE 12
+#define PACKET_SIZE (PAYLOAD_SIZE + HEADER_SIZE)
+#define WINDOW_SIZE 20
+
 void cleanup(int sockfd){
   close(sockfd);
   return;
@@ -60,9 +66,9 @@ int main(int argc, char *argv[])
 
 
   // Last ACKed packet
-  int lastAck = 1; 
+  int lastAck = 0; 
   // Last sent packet
-  int lastSentPacket = 1;
+  int lastPacketSent = 0;
 
   // Used to handle SIGINT
   signal(SIGINT,sig);
@@ -122,7 +128,7 @@ int main(int argc, char *argv[])
     retransmit();
 
     // Print out data
-    write(1, server_buf, bytes_recvd);
+    
   }
 
   return 0;
