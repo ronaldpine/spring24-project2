@@ -21,11 +21,28 @@ void cleanup(int sockfd){
   return;
 }
 
-void processData(struct sockaddr_in clientAddress, char *client_buf){
-  // Inspect client information
-  char* client_ip = inet_ntoa(clientAddress.sin_addr);
-                // "Network bytes to address string"
-  int client_port = ntohs(clientAddress.sin_port); // Little endian
+void dumpMessage( char client_data[1024], int numBytesRecv){
+  cout << "In the dump Message function" << endl;
+  string message;
+  for (int i = 0; i < numBytesRecv; i++) {
+        char c = client_data[i];
+        message += c;
+  }
+
+  cout << message << endl;
+  // Flush the output to make sure it appears in the console
+  cout.flush();
+
+}
+
+void processData(struct sockaddr_in clientAddress,  char client_data[1024], int numBytesRecv){
+
+
+  //print out the message
+  dumpMessage(client_data, numBytesRecv);
+
+
+
 
   return;
 }
@@ -36,6 +53,7 @@ void retransmit(){
 
 void sig(int signal){
   status = 0;
+  // flush everything to std out
 }
 
 
@@ -45,12 +63,15 @@ int main(int argc, char *argv[])
   // Check for valid amount of arguments passed in
   if(argc != 5){
     // Not sure about this return code
+    cout << "Not enough commands " << endl;
     return -1;
   }
 
   // Parse the arguments from the command typed in
   int securityFlag = stoi(argv[1]);
+  cout << "Security flag is: " << securityFlag << endl;
   int PORT = stoi(argv[2]);
+  cout << "Port is: " << PORT << endl;
   string privKeyFile = argv[3];
   string certFile = argv[4];
 
@@ -62,7 +83,7 @@ int main(int argc, char *argv[])
   int currPacket = 1;
   //
 
-  signal(SIGINT,sig);
+  // signal(SIGINT,sig);
 
 
   // Create socket
@@ -74,9 +95,9 @@ int main(int argc, char *argv[])
   }
 
   // Set up flags so the sokcet is nonblocking
-  int flags = fcntl(sockfd, F_GETFL);
-  flags |= O_NONBLOCK;
-  fcntl(sockfd, F_SETFL, flags);
+  // int flags = fcntl(sockfd, F_GETFL);
+  // flags |= O_NONBLOCK;
+  // fcntl(sockfd, F_SETFL, flags);
 
   // Create the server address with IPV4 and for any connections
   struct sockaddr_in serverAddress;
@@ -112,17 +133,24 @@ int main(int argc, char *argv[])
 
 
   // Listen to message from clients in non-blocking manner, while running
-  while(status == 1){
+  while(true){
+
+    // cout << "in the while loop" << endl;
   // Check for data from client
-  int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE,
+  int numBytesRecv = recvfrom(sockfd, client_buf, BUF_SIZE,
 	                           0, (struct sockaddr*) &clientAddress, 
 	                           &clientSize);
 
   // If there is data process, else continue
-  if (bytes_recvd <= 0) continue;
+  if ( numBytesRecv < 0) continue;
+
+    // Inspect client information
+  char* client_ip = inet_ntoa(clientAddress.sin_addr);
+                // "Network bytes to address string"
+  int client_port = ntohs(clientAddress.sin_port); // Little endian
 
   // Else process the data 
-  processData(clientAddress, client_buf);
+  processData(clientAddress, client_buf, numBytesRecv);
 
   // Check if there need to retransmit
   retransmit();

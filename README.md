@@ -39,3 +39,7 @@ docker compose down -v --rmi all --remove-orphans
     ## REPLACE CONTENT OF THIS FILE WITH YOUR PROJECT REPORT ##
     ##                                                       ##
     ###########################################################
+
+
+# Problems
+1) Had problem printing and establishing connection to specified port on local host

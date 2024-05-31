@@ -46,6 +46,7 @@ void timeout(){
 
 void sig(int signal){
   status = 0;
+   // flush everything to std out
 }
 
 int main(int argc, char *argv[])
