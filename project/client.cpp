@@ -33,6 +33,7 @@ int sendData(int sockfd, string message, struct sockaddr_in serverAddress){
 
 
 void processData(){
+  cout << "will process data" << endl;
   return;
 }
 
@@ -55,6 +56,7 @@ int main(int argc, char *argv[])
   // Check for valid amount of arguments passed in
   if(argc != 5){
     // Not sure about this return code
+    cout << "not enough arguments for client" << endl;
     return -1;
   }
 
@@ -62,7 +64,6 @@ int main(int argc, char *argv[])
    // Parse the arguments from the command typed in
   int securityFlag = stoi(argv[1]);
   string host = argv[2];
-  int PORT = stoi(argv[3]);
   string pubKey = argv[4];
 
 
@@ -94,17 +95,17 @@ int main(int argc, char *argv[])
   serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
 
   // Set receiving port and set byte ordering to Big Endian
-  // int PORT = 8080;
+  int PORT = stoi(argv[3]);
   serverAddress.sin_port = htons(PORT); 
 
   const int trueFlag = 1;
   if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &trueFlag, sizeof(int)) == -1){
-    // cout << "Flag setting issue" << endl;
+    cout << "Flag setting issue" << endl;
     return errno;
   }
 
   // send data
-  int dataSent = sendData(sockfd, "", serverAddress);
+  int dataSent = sendData(sockfd, "Hello world!", serverAddress);
 
   // Create buffer to store messages
   int BUF_SIZE = 1024;
@@ -113,22 +114,28 @@ int main(int argc, char *argv[])
 
 
   // Listen to messages from server
-  while(true){
+  while(status == 1){
     /* 5. Listen for response from server */
     int bytes_recvd = recvfrom(sockfd, server_buf, BUF_SIZE, 
                         // socket  store data  how much
                            0, (struct sockaddr*) &serverAddress, 
                            &serversize);
     // If there is data process, else continue
-    if (bytes_recvd <= 0) continue;
-
-    // Else process the data 
+    // cout << "No data" << endl;
+    if (bytes_recvd > 0){
+    
+    write(1, server_buf, bytes_recvd);
+       // Else process the data 
     processData();
 
     // Check if there need to retransmit
     retransmit();
+    }
+
+
 
     // Print out data
+    sleep(0.5);
     
   }
 

@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <csignal> // Used for SIGINT
+#include <cstring>
 #include <fcntl.h> // Used for non-blocking
 
 // Macros for reliable transport
@@ -22,25 +23,35 @@ void cleanup(int sockfd){
 }
 
 void dumpMessage( char client_data[1024], int numBytesRecv){
-  cout << "In the dump Message function" << endl;
-  string message;
-  for (int i = 0; i < numBytesRecv; i++) {
-        char c = client_data[i];
-        message += c;
-  }
-
-  cout << message << endl;
-  // Flush the output to make sure it appears in the console
-  cout.flush();
+ cout << "In the dumpMessage function" << endl;
+    string message(client_data, numBytesRecv);
+    cout << "Received message: " << message << endl;
+    cout.flush();
 
 }
 
-void processData(struct sockaddr_in clientAddress,  char client_data[1024], int numBytesRecv){
+void sendResponse(int sockfd, struct sockaddr_in clientAddress){
+  char server_buf[] = "Received!";
+  int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+                   // socket  send data   how much to send
+                      0, (struct sockaddr*) &clientAddress, 
+                   // flags   where to send
+                      sizeof(clientAddress));
+  
+  cout << "Did send value: " << did_send << endl;
+
+}
+
+void processData(int sockfd,struct sockaddr_in clientAddress,  char client_data[1024], int numBytesRecv){
 
 
-  //print out the message
+  // Print out the message
   dumpMessage(client_data, numBytesRecv);
 
+  cout << "Finished dumping message" << endl;
+  // Send response back
+  cout << "Sending Response" << endl;
+  sendResponse(sockfd, clientAddress);
 
 
 
@@ -70,8 +81,6 @@ int main(int argc, char *argv[])
   // Parse the arguments from the command typed in
   int securityFlag = stoi(argv[1]);
   cout << "Security flag is: " << securityFlag << endl;
-  int PORT = stoi(argv[2]);
-  cout << "Port is: " << PORT << endl;
   string privKeyFile = argv[3];
   string certFile = argv[4];
 
@@ -95,9 +104,9 @@ int main(int argc, char *argv[])
   }
 
   // Set up flags so the sokcet is nonblocking
-  // int flags = fcntl(sockfd, F_GETFL);
-  // flags |= O_NONBLOCK;
-  // fcntl(sockfd, F_SETFL, flags);
+  int flags = fcntl(sockfd, F_GETFL);
+  flags |= O_NONBLOCK;
+  fcntl(sockfd, F_SETFL, flags);
 
   // Create the server address with IPV4 and for any connections
   struct sockaddr_in serverAddress;
@@ -105,6 +114,8 @@ int main(int argc, char *argv[])
   serverAddress.sin_addr.s_addr = INADDR_ANY;
 
   // Set receiving port and set byte ordering to Big Endian
+  int PORT = stoi(argv[2]);
+  cout << "Port number is: " << PORT << endl;
   serverAddress.sin_port = htons(PORT); 
 
   // Be able to reuse the socket address and port
@@ -133,27 +144,19 @@ int main(int argc, char *argv[])
 
 
   // Listen to message from clients in non-blocking manner, while running
-  while(true){
+  while(status == 1){
 
-    // cout << "in the while loop" << endl;
-  // Check for data from client
-  int numBytesRecv = recvfrom(sockfd, client_buf, BUF_SIZE,
-	                           0, (struct sockaddr*) &clientAddress, 
-	                           &clientSize);
+    int numBytesRecv = recvfrom(sockfd, client_buf, BUF_SIZE, 0, (struct sockaddr*)&clientAddress, &clientSize);
 
-  // If there is data process, else continue
-  if ( numBytesRecv < 0) continue;
-
-    // Inspect client information
-  char* client_ip = inet_ntoa(clientAddress.sin_addr);
-                // "Network bytes to address string"
-  int client_port = ntohs(clientAddress.sin_port); // Little endian
-
-  // Else process the data 
-  processData(clientAddress, client_buf, numBytesRecv);
-
-  // Check if there need to retransmit
-  retransmit();
+    if (numBytesRecv > 0) {
+      processData(sockfd, clientAddress, client_buf, numBytesRecv);
+      retransmit();
+    } else if (numBytesRecv < 0 && errno != EAGAIN) {
+      perror("recvfrom");
+    }
+    else{
+      // cout << errno << endl;
+    }
 
   }
 
