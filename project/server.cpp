@@ -6,6 +6,8 @@
 #include <csignal>
 #include <cstring>
 #include <fcntl.h>
+#include <vector>
+#include <map>
 
 #define PAYLOAD_SIZE 1024
 #define HEADER_SIZE 12
@@ -16,7 +18,6 @@
 using namespace std;
 volatile sig_atomic_t status = 1;
 
-
 // Struct for packet
 typedef struct __attribute__((__packed__)) {
     uint32_t seq;
@@ -26,42 +27,54 @@ typedef struct __attribute__((__packed__)) {
     uint8_t data[MSS];
 } packet;
 
-
-
 void cleanup(int sockfd) {
     close(sockfd);
 }
 
 void dumpMessage(packet* clientPacket) {
-   for(int i = 0; i < clientPacket->size; i++){
-    cout << clientPacket->data[i];
-   }
-   cout << endl;
-   cout.flush();
+    for (int i = 0; i < clientPacket->size; i++) {
+        cout << clientPacket->data[i];
+    }
+    cout.flush();
 }
 
-void sendAck(int sockfd, struct sockaddr_in clientAddress, packet ACK) {
+void sendAck(int sockfd, struct sockaddr_in clientAddress, uint32_t ack) {
+    packet ACK = {0};
+    ACK.ack = ack;
     int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
 }
 
-void sendData(int sockfd, struct sockaddr_in clientAddress, char inputBuff[1024], int dataSize, int serverSeq, int lastRecAck){
-    packet serverData;
+void sendData(int sockfd, struct sockaddr_in clientAddress, char inputBuff[1024], int dataSize, int serverSeq, int lastRecAck) {
+    packet serverData = {0};
     serverData.seq = serverSeq;
     serverData.ack = lastRecAck;
     serverData.size = dataSize;
     memcpy(serverData.data, inputBuff, dataSize);
-    
+
     int sent = sendto(sockfd, &serverData, sizeof(serverData), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
 }
 
-void processData(int sockfd, struct sockaddr_in clientAddress ,packet* clientPacket) {
-    // First dump message
-    dumpMessage(clientPacket);
-    // packet ACK = {0};
-    // ACK.ack = clientPacket.seq;
-    // // Send ack back
-    // int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
-    
+void processData(int sockfd, struct sockaddr_in clientAddress, packet* clientPacket, int &lastSentACK, map<uint32_t, packet> &bufferedPackets) {
+    // If packet arrives in order, dump and update ack counter
+    if (clientPacket->seq == lastSentACK -1 ) {
+        dumpMessage(clientPacket);
+        lastSentACK++;
+
+        // Process buffered packets in order
+        while (bufferedPackets.count(lastSentACK) > 0) {
+            packet pkt = bufferedPackets[lastSentACK];
+            dumpMessage(&pkt);
+            bufferedPackets.erase(lastSentACK);
+            lastSentACK++;
+        }
+
+        // Send acknowledgment for the new highest ACK received
+        sendAck(sockfd, clientAddress, lastSentACK);
+    }
+    // Else if packet arrives out of order, buffer the packet
+    else if (clientPacket->seq > lastSentACK) {
+        bufferedPackets[clientPacket->seq] = *clientPacket;
+    }
 }
 
 void retransmit() {
@@ -93,6 +106,10 @@ int main(int argc, char *argv[]) {
     flags |= O_NONBLOCK;
     fcntl(sockfd, F_SETFL, flags);
 
+    // Flags to make read call non-blocking
+    int stdin_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
+
     struct sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = INADDR_ANY;
@@ -112,14 +129,13 @@ int main(int argc, char *argv[]) {
         return errno;
     }
 
- 
-    char client_buf[sizeof(packet) + MSS];
-    // packet clientPacket;
+    char client_buf[sizeof(packet)];
     struct sockaddr_in clientAddress;
     socklen_t clientSize = sizeof(clientAddress);
 
     int BUF_SIZE = 1024;
     char inputBuff[BUF_SIZE];
+
     signal(SIGINT, sig);
 
     // Current packet number to send
@@ -129,35 +145,34 @@ int main(int argc, char *argv[]) {
     // Last ack number the client sent over
     int lastRecAck = 0;
 
+    // Used for packet buffering
+    map<uint32_t, packet> bufferedPackets;
+
 
     while (status == 1) {
-
-        // check if there is any read data from stdin
-
+        // Check if there is any read data from stdin
         int messageBytes = read(STDIN_FILENO, inputBuff, BUF_SIZE);
-        // If there is data written to stdin, format a packet
-        if(messageBytes > 0){
+
+        // If there is data written to stdin, format a packet if we know client address
+        if (messageBytes > 0) {
+            // Add null character to the message/bytes from stdin
             inputBuff[messageBytes] = '\0';
+
             // Send Packet with stdin data
             sendData(sockfd, clientAddress, inputBuff, messageBytes, serverSeq, lastSentACK);
         }
 
-
-        // memset(client_buf, 0, BUF_SIZE);
-         int numBytesRecv = recvfrom(sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*)&clientAddress, &clientSize);
+        // Check if there is data from client
+        int numBytesRecv = recvfrom(sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*)&clientAddress, &clientSize);
 
         if (numBytesRecv > 0) {
-            continue;
             // Format the buffer into UDP packet format
-            packet* clientPacket = (packet*) &client_buf;
-            processData(sockfd, clientAddress, clientPacket);
+            packet* clientPacket = (packet*)&client_buf;
+            processData(sockfd, clientAddress, clientPacket, lastSentACK, bufferedPackets);
             retransmit();
-        } else if (numBytesRecv < 0 && errno != EAGAIN) {
-            perror("recvfrom");
         }
     }
 
     cleanup(sockfd);
-    // cout << "Server terminated gracefully" << endl;
     return 0;
 }

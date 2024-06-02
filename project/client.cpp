@@ -30,19 +30,32 @@ void cleanup(int sockfd) {
     close(sockfd);
 }
 
-int sendData(int sockfd, string message, struct sockaddr_in serverAddress) {
-    char client_buf[1024];
-    strcpy(client_buf, message.c_str());
-    int did_send = sendto(sockfd, client_buf, strlen(client_buf), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
-    if (did_send < 0) {
-        perror("sendto");
-        return errno;
-    }
-    return 1;
+void dumpMessage(packet* serverPacket) {
+   for(int i = 0; i < serverPacket->size; i++){
+    cout << serverPacket->data[i];
+   }
+   cout.flush();
 }
 
-void processData() {
-    cout << "will process data" << endl;
+void sendAck(int sockfd, struct sockaddr_in clientAddress, packet ACK) {
+    int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
+}
+
+
+void sendData(int sockfd, struct sockaddr_in serverAddress, char inputBuff[1024], int dataSize, int clientSeq, int lastRecAck){
+    packet clientData;
+    clientData.seq = clientSeq;
+    clientData.ack = lastRecAck;
+    clientData.size = dataSize;
+    memcpy(clientData.data, inputBuff, dataSize);
+    
+    int sent = sendto(sockfd, &clientData, sizeof(clientData), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+    
+}
+void processData(int sockfd, struct sockaddr_in serverAddress,packet* clientPacket, int lastRecAck, int lastSentACK) {
+    // First dump message to console
+    dumpMessage(clientPacket);
+    
 }
 
 void retransmit() {
@@ -77,6 +90,10 @@ int main(int argc, char *argv[]) {
     flags |= O_NONBLOCK;
     fcntl(sockfd, F_SETFL, flags);
 
+    // Flags to make read call non-blocking
+    int stdin_flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+    fcntl(STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK);
+
     struct sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1");
@@ -90,30 +107,52 @@ int main(int argc, char *argv[]) {
         return errno;
     }
 
-    int dataSent = sendData(sockfd, "Hello world!", serverAddress);
-    if (dataSent < 0) {
-        perror("sendData");
-    }
+    // Buffer for server 
+    char server_buf[sizeof(packet) + MSS];
+    socklen_t serverSize;
 
+    // BUffer for stdin
     int BUF_SIZE = 1024;
-    char server_buf[BUF_SIZE];
-    socklen_t serverSize = sizeof(serverAddress);
+    char inputBuff[BUF_SIZE];
 
+    // Interrupt signal handler
     signal(SIGINT, sig);
 
+    // Current packet number to send
+    int clientSeq = 1;
+    // Last ack number this server has sent over;
+    int lastSentACK = 0;
+    // Last ack number the client sent over
+    int lastRecAck = 0;
+
     while (status == 1) {
-        memset(server_buf, 0, BUF_SIZE);
+
+        // Check if there is any read data from stdin
+        int messageBytes = read(STDIN_FILENO, inputBuff, BUF_SIZE);
+
+        // If there is data written to stdin, format a packet
+        if(messageBytes > 0){
+            inputBuff[messageBytes] = '\0';
+            // cout << "Rec data from stdin" << endl;
+            // Send Packet with stdin data
+            sendData(sockfd, serverAddress, inputBuff, messageBytes, clientSeq, lastSentACK);
+            clientSeq++;
+
+        }
+    
         int bytes_recvd = recvfrom(sockfd, server_buf, BUF_SIZE, 0, (struct sockaddr*)&serverAddress, &serverSize);
 
         if (bytes_recvd > 0) {
-            write(1, server_buf, bytes_recvd);
-            processData();
-            retransmit();
-        } else if (bytes_recvd < 0 && errno != EAGAIN) {
-            perror("recvfrom");
-        }
+            // Format server buffer into a packet
+            packet* serverPacket = (packet*) &server_buf;
+            processData(sockfd, serverAddress, serverPacket, lastRecAck, lastSentACK);
+            
+            // Increase counters
+            lastRecAck++;
+            
+        } 
 
-        sleep(1); // Wait before checking again to avoid busy waiting
+
     }
 
     cleanup(sockfd);
