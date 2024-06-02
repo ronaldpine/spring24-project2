@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <csignal>
 #include <fcntl.h>
+#include <map>
 
 using namespace std;
 volatile sig_atomic_t status = 1;
@@ -34,6 +35,7 @@ void dumpMessage(packet* serverPacket) {
    for(int i = 0; i < serverPacket->size; i++){
     cout << serverPacket->data[i];
    }
+//    cout << " , packet number: " << serverPacket->seq << endl;
    cout.flush();
 }
 
@@ -42,20 +44,44 @@ void sendAck(int sockfd, struct sockaddr_in clientAddress, packet ACK) {
 }
 
 
-void sendData(int sockfd, struct sockaddr_in serverAddress, char inputBuff[1024], int dataSize, int clientSeq, int lastRecAck){
+void sendData(int sockfd, struct sockaddr_in serverAddress, char inputBuff[1024], int dataSize, int &clientSeq, int lastSentAck){
     packet clientData;
     clientData.seq = clientSeq;
-    clientData.ack = lastRecAck;
+    clientData.ack = lastSentAck + 1;
     clientData.size = dataSize;
     memcpy(clientData.data, inputBuff, dataSize);
     
     int sent = sendto(sockfd, &clientData, sizeof(clientData), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+
+    if(sent != -1){
+        clientSeq++;
+        cout << "Sent message" << endl;
+        return;
+    }
+    cout << "didnt send message" << endl;
     
 }
-void processData(int sockfd, struct sockaddr_in serverAddress,packet* clientPacket, int lastRecAck, int lastSentACK) {
+void processData(int sockfd, struct sockaddr_in serverAddress,packet* serverPacket, int &lastSentACK,map<uint32_t, packet> &bufferedPackets) {
     // First dump message to console
-    dumpMessage(clientPacket);
-    
+      if (serverPacket->seq == lastSentACK + 1) {
+        dumpMessage(serverPacket);
+        lastSentACK++;
+
+        // Process buffered packets in order
+        while (bufferedPackets.count(lastSentACK) > 0) {
+            packet pkt = bufferedPackets[lastSentACK];
+            dumpMessage(&pkt);
+            bufferedPackets.erase(lastSentACK);
+            lastSentACK++;
+        }
+
+        // Send acknowledgment for the new highest ACK received
+        // sendAck(sockfd, clientAddress, lastSentACK);
+    }
+    // Else if packet arrives out of order, buffer the packet
+    else if (serverPacket->seq > lastSentACK) {
+        bufferedPackets[serverPacket->seq] = *serverPacket;
+    }
 }
 
 void retransmit() {
@@ -125,6 +151,10 @@ int main(int argc, char *argv[]) {
     // Last ack number the client sent over
     int lastRecAck = 0;
 
+    
+    // Used for packet buffering
+    map<uint32_t, packet> bufferedPackets;
+
     while (status == 1) {
 
         // Check if there is any read data from stdin
@@ -133,23 +163,20 @@ int main(int argc, char *argv[]) {
         // If there is data written to stdin, format a packet
         if(messageBytes > 0){
             inputBuff[messageBytes] = '\0';
-            // cout << "Rec data from stdin" << endl;
+            cout << "Rec data from stdin" << endl;
             // Send Packet with stdin data
             sendData(sockfd, serverAddress, inputBuff, messageBytes, clientSeq, lastSentACK);
-            clientSeq++;
+            // clientSeq++;
 
         }
     
         int bytes_recvd = recvfrom(sockfd, server_buf, BUF_SIZE, 0, (struct sockaddr*)&serverAddress, &serverSize);
 
         if (bytes_recvd > 0) {
+            cout << "Rec data from server" << endl;
             // Format server buffer into a packet
             packet* serverPacket = (packet*) &server_buf;
-            processData(sockfd, serverAddress, serverPacket, lastRecAck, lastSentACK);
-            
-            // Increase counters
-            lastRecAck++;
-            
+            processData(sockfd, serverAddress, serverPacket, lastSentACK, bufferedPackets);
         } 
 
 
