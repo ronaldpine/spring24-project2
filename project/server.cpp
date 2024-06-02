@@ -51,7 +51,7 @@ void sendData(int sockfd, struct sockaddr_in clientAddress, char inputBuff[1024]
     serverData.size = dataSize;
     memcpy(serverData.data, inputBuff, dataSize);
     
-    // int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
+    int sent = sendto(sockfd, &serverData, sizeof(serverData), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
 }
 
 void processData(int sockfd, struct sockaddr_in clientAddress ,packet* clientPacket) {
@@ -147,6 +147,7 @@ int main(int argc, char *argv[]) {
          int numBytesRecv = recvfrom(sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*)&clientAddress, &clientSize);
 
         if (numBytesRecv > 0) {
+            continue;
             // Format the buffer into UDP packet format
             packet* clientPacket = (packet*) &client_buf;
             processData(sockfd, clientAddress, clientPacket);
