@@ -28,12 +28,13 @@ typedef struct __attribute__((__packed__)) {
 
 void cleanup(int sockfd) {
     close(sockfd);
+    cout.flush();
 }
 
 void dumpMessage(packet* clientPacket) {
 
     if(clientPacket->seq == 0){
-        cout << "Ack rec for: " << clientPacket->ack << endl;
+        // cout << "Ack rec for: " << clientPacket->ack << endl;
         return;
     }
 
@@ -46,12 +47,14 @@ void dumpMessage(packet* clientPacket) {
 }
 
 void sendAck(int sockfd, struct sockaddr_in clientAddress, int &lastSentAck) {
-    cout << "sent ack" << endl;
     // return;
     // lastSentAck++;
     packet ACK = {0};
     ACK.ack = (uint32_t)lastSentAck + 1;
     int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
+    if(sent != -1){
+        // cout << "sent ack" << endl;
+    }
 }
 
 void sendData(int sockfd, struct sockaddr_in clientAddress, char inputBuff[1024], int dataSize, int &serverSeq, int lastSentAck) {
@@ -71,7 +74,12 @@ void sendData(int sockfd, struct sockaddr_in clientAddress, char inputBuff[1024]
     // cout << "didnt send message" << endl;
 }
 
-void processData(int sockfd, struct sockaddr_in clientAddress, packet* clientPacket, int &lastSentACK, map<uint32_t, packet> &bufferedPackets) {
+void processData(int sockfd, struct sockaddr_in clientAddress, packet* clientPacket, int &lastSentACK, int &lastRecAck, map<uint32_t, packet> &bufferedPackets) {
+    //If there is an ack packet
+    if(clientPacket->seq == 0){
+        lastRecAck = clientPacket->ack;
+        return;
+    }
     // If packet arrives in order, dump and update ack counter
     if (clientPacket->seq == lastSentACK + 1) {
         dumpMessage(clientPacket);
@@ -93,7 +101,7 @@ void processData(int sockfd, struct sockaddr_in clientAddress, packet* clientPac
 
     // Send an ack
     // cout << "sending ack " << endl;
-    // sendAck(sockfd, clientAddress, lastSentACK);
+    sendAck(sockfd, clientAddress, lastSentACK);
     // cout << "Ack sent" << endl;
 }
 
@@ -101,9 +109,13 @@ void retransmit() {
     return;
 }
 
+int sockfd;
+
 void sig(int signal) {
     status = 0;
     close(STDIN_FILENO);
+    cleanup(sockfd);
+    exit(0);
 }
 
 int main(int argc, char *argv[]) {
@@ -116,7 +128,7 @@ int main(int argc, char *argv[]) {
     string privKeyFile = argv[3];
     string certFile = argv[4];
 
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
         perror("socket");
         exit(errno);
@@ -149,10 +161,12 @@ int main(int argc, char *argv[]) {
         return errno;
     }
 
-    char client_buf[sizeof(packet)];
+    // Buffer for client
+    char client_buf[sizeof(packet) + MSS];
     struct sockaddr_in clientAddress;
     socklen_t clientSize = sizeof(clientAddress);
 
+    // Buffer for stdin
     int BUF_SIZE = 1024;
     char inputBuff[BUF_SIZE];
 
@@ -186,11 +200,11 @@ int main(int argc, char *argv[]) {
         // Check if there is data from client
         int numBytesRecv = recvfrom(sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*)&clientAddress, &clientSize);
 
-        if (numBytesRecv > 0) {
+        if (numBytesRecv > 0 ) {
             // cout << "Rec data from client" << endl;
             // Format the buffer into UDP packet format
             packet* clientPacket = (packet*)&client_buf;
-            processData(sockfd, clientAddress, clientPacket, lastSentACK, bufferedPackets);
+            processData(sockfd, clientAddress, clientPacket, lastSentACK,lastRecAck, bufferedPackets);
         }
     }
 

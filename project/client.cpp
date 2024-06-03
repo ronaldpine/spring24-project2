@@ -29,13 +29,14 @@ typedef struct __attribute__((__packed__)) {
 
 void cleanup(int sockfd) {
     close(sockfd);
+    cout.flush();
 }
 
 void dumpMessage(packet* serverPacket) {
 
     // Remember to comment this out, testing ack
     if(serverPacket->seq == 0){
-        cout << "Ack rec for: " << serverPacket->ack << endl;
+        // cout << "Ack rec for: " << serverPacket->ack << endl;
         return;
     }
 
@@ -48,17 +49,20 @@ void dumpMessage(packet* serverPacket) {
 }
 
 void sendAck(int sockfd, struct sockaddr_in serverAddress, int &lastSentAck) {
-    cout << "sent ack" << endl;
-    // return;
-    // lastSentAck++;
     packet ACK = {0};
-    ACK.ack = (uint32_t)lastSentAck;
+    ACK.ack = (uint32_t)lastSentAck + 1;
     int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
+    if(sent != -1){
+        // cout << "sent ack" << endl;
+    }
+    else{
+        cout << errno << endl;
+    }
 }
 
 
 void sendData(int sockfd, struct sockaddr_in serverAddress, char inputBuff[1024], int dataSize, int &clientSeq, int lastSentAck){
-    packet clientData;
+    packet clientData {0};
     clientData.seq = clientSeq;
     clientData.ack = lastSentAck + 1;
     clientData.size = dataSize;
@@ -74,7 +78,11 @@ void sendData(int sockfd, struct sockaddr_in serverAddress, char inputBuff[1024]
     // cout << "didnt send message" << endl;
     
 }
-void processData(int sockfd, struct sockaddr_in serverAddress,packet* serverPacket, int &lastSentACK,map<uint32_t, packet> &bufferedPackets) {
+void processData(int sockfd, struct sockaddr_in serverAddress,packet* serverPacket, int &lastSentACK, int &lastRecAck,map<uint32_t, packet> &bufferedPackets) {
+     if(serverPacket->seq == 0){
+        lastRecAck = serverPacket->ack;
+        return;
+    }
     // First dump message to console
       if (serverPacket->seq == lastSentACK + 1) {
         dumpMessage(serverPacket);
@@ -97,7 +105,7 @@ void processData(int sockfd, struct sockaddr_in serverAddress,packet* serverPack
     }
     // Send an ack
     // cout << "sending ack " << endl;
-    // sendAck(sockfd, serverAddress, lastSentACK);
+    sendAck(sockfd, serverAddress, lastSentACK);
     // cout << "Ack sent" << endl;
 }
 
@@ -105,12 +113,13 @@ void retransmit() {
     return;
 }
 
-void timeout() {
-    exit(3);
-}
+int sockfd;
 
 void sig(int signal) {
     status = 0;
+    close(STDIN_FILENO);
+    cleanup(sockfd);
+    exit(0);
 }
 
 int main(int argc, char *argv[]) {
@@ -123,7 +132,7 @@ int main(int argc, char *argv[]) {
     string host = argv[2];
     string pubKey = argv[4];
 
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    sockfd  = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
         perror("socket");
         exit(errno);
@@ -187,13 +196,17 @@ int main(int argc, char *argv[]) {
 
         }
     
-        int bytes_recvd = recvfrom(sockfd, server_buf, BUF_SIZE, 0, (struct sockaddr*)&serverAddress, &serverSize);
+        int bytes_recvd = recvfrom(sockfd, &server_buf,sizeof(server_buf), 0, (struct sockaddr*)&serverAddress, &serverSize);
+        // cout << bytes_recvd << endl;
+        // continue;
 
         if (bytes_recvd > 0) {
             // cout << "Rec data from server" << endl;
+            // cout << bytes_recvd << endl;
+            // continue;
             // Format server buffer into a packet
             packet* serverPacket = (packet*) &server_buf;
-            processData(sockfd, serverAddress, serverPacket, lastSentACK, bufferedPackets);
+            processData(sockfd, serverAddress, serverPacket, lastSentACK, lastRecAck, bufferedPackets);
         } 
 
 
@@ -203,3 +216,5 @@ int main(int argc, char *argv[]) {
     // cout << "Client terminated gracefully" << endl;
     return 0;
 }
+
+

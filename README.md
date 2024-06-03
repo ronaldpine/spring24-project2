@@ -43,3 +43,4 @@ docker compose down -v --rmi all --remove-orphans
 
 # Problems
 1) Had problem printing and establishing connection to specified port on local host
+2) Acks were breaking my code on the client side
