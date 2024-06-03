@@ -49,10 +49,10 @@ void dumpMessage(packet* serverPacket) {
 
 void sendAck(int sockfd, struct sockaddr_in serverAddress, int &lastSentAck) {
     cout << "sent ack" << endl;
-    return;
-    lastSentAck++;
+    // return;
+    // lastSentAck++;
     packet ACK = {0};
-    ACK.ack = lastSentAck;
+    ACK.ack = (uint32_t)lastSentAck;
     int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
 }
 
@@ -98,7 +98,7 @@ void processData(int sockfd, struct sockaddr_in serverAddress,packet* serverPack
     // Send an ack
     // cout << "sending ack " << endl;
     // sendAck(sockfd, serverAddress, lastSentACK);
-    cout << "Ack sent" << endl;
+    // cout << "Ack sent" << endl;
 }
 
 void retransmit() {
@@ -200,6 +200,6 @@ int main(int argc, char *argv[]) {
     }
 
     cleanup(sockfd);
-    cout << "Client terminated gracefully" << endl;
+    // cout << "Client terminated gracefully" << endl;
     return 0;
 }
