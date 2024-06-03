@@ -28,7 +28,7 @@ typedef struct __attribute__((__packed__)) {
 
 void cleanup(int sockfd) {
     close(sockfd);
-    cout.flush();
+    // cout.flush();
 }
 
 void dumpMessage(packet* clientPacket) {
@@ -41,7 +41,7 @@ void dumpMessage(packet* clientPacket) {
     write(STDOUT_FILENO, clientPacket->data, clientPacket->size);
     // cout << " , packet number: " << clientPacket->seq << endl;
     // cout << " , ack number: " << clientPacket->ack << endl;
-    cout.flush();
+    // cout.flush();
 }
 
 void sendAck(int sockfd, struct sockaddr_in clientAddress, int &lastSentAck) {
