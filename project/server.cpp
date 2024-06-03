@@ -6,7 +6,6 @@
 #include <csignal>
 #include <cstring>
 #include <fcntl.h>
-#include <vector>
 #include <map>
 
 #define PAYLOAD_SIZE 1024
@@ -32,16 +31,26 @@ void cleanup(int sockfd) {
 }
 
 void dumpMessage(packet* clientPacket) {
+
+    if(clientPacket->seq == 0){
+        cout << "Ack rec for: " << clientPacket->ack << endl;
+        return;
+    }
+
     for (int i = 0; i < clientPacket->size; i++) {
         cout << clientPacket->data[i];
     }
     // cout << " , packet number: " << clientPacket->seq << endl;
+    // cout << " , ack number: " << clientPacket->ack << endl;
     cout.flush();
 }
 
-void sendAck(int sockfd, struct sockaddr_in clientAddress, uint32_t ack) {
+void sendAck(int sockfd, struct sockaddr_in clientAddress, int &lastSentAck) {
+    cout << "sent ack" << endl;
+    return;
+    lastSentAck++;
     packet ACK = {0};
-    ACK.ack = ack;
+    ACK.ack = lastSentAck;
     int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
 }
 
@@ -56,10 +65,10 @@ void sendData(int sockfd, struct sockaddr_in clientAddress, char inputBuff[1024]
 
     if(sent != -1){
         serverSeq++;
-        cout << "Sent message" << endl;
+        // cout << "Sent message" << endl;
         return;
     }
-    cout << "didnt send message" << endl;
+    // cout << "didnt send message" << endl;
 }
 
 void processData(int sockfd, struct sockaddr_in clientAddress, packet* clientPacket, int &lastSentACK, map<uint32_t, packet> &bufferedPackets) {
@@ -76,13 +85,16 @@ void processData(int sockfd, struct sockaddr_in clientAddress, packet* clientPac
             lastSentACK++;
         }
 
-        // Send acknowledgment for the new highest ACK received
-        sendAck(sockfd, clientAddress, lastSentACK);
     }
     // Else if packet arrives out of order, buffer the packet
     else if (clientPacket->seq > lastSentACK) {
         bufferedPackets[clientPacket->seq] = *clientPacket;
     }
+
+    // Send an ack
+    // cout << "sending ack " << endl;
+    // sendAck(sockfd, clientAddress, lastSentACK);
+    cout << "Ack sent" << endl;
 }
 
 void retransmit() {
@@ -165,7 +177,7 @@ int main(int argc, char *argv[]) {
         if (messageBytes > 0) {
             // Add null character to the message/bytes from stdin
             inputBuff[messageBytes] = '\0';
-            cout << "Rec data from stdin" << endl;
+            // cout << "Rec data from stdin" << endl;
             // Send Packet with stdin data
             sendData(sockfd, clientAddress, inputBuff, messageBytes, serverSeq, lastSentACK);
             // serverSeq++;
@@ -175,7 +187,7 @@ int main(int argc, char *argv[]) {
         int numBytesRecv = recvfrom(sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*)&clientAddress, &clientSize);
 
         if (numBytesRecv > 0) {
-            cout << "Rec data from client" << endl;
+            // cout << "Rec data from client" << endl;
             // Format the buffer into UDP packet format
             packet* clientPacket = (packet*)&client_buf;
             processData(sockfd, clientAddress, clientPacket, lastSentACK, bufferedPackets);
