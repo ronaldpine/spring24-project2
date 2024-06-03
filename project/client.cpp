@@ -40,6 +40,7 @@ void dumpMessage(packet* serverPacket) {
         return;
     }
 
+
     write(STDOUT_FILENO, serverPacket->data, serverPacket->size);
 //    cout << " , packet number: " << serverPacket->seq << endl;
 //    cout << "Ack: " << serverPacket->ack << endl;
@@ -47,10 +48,11 @@ void dumpMessage(packet* serverPacket) {
 
 void sendAck(int sockfd, struct sockaddr_in serverAddress, int &lastSentAck) {
     packet ACK = {0};
-    ACK.ack = (uint32_t)lastSentAck + 1;
+    ACK.ack = (uint32_t)lastSentAck;
     int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
     if(sent != -1){
         // cout << "sent ack" << endl;
+        // cout << "SEND " << ACK.seq << " ACK " << ACK.ack << endl;
     }
     else{
         // cout << errno << endl;
@@ -60,9 +62,9 @@ void sendAck(int sockfd, struct sockaddr_in serverAddress, int &lastSentAck) {
 
 void sendData(int sockfd, struct sockaddr_in serverAddress, char inputBuff[1024], int dataSize, int &clientSeq, int lastSentAck){
     packet clientData {0};
-    clientData.seq = clientSeq;
-    clientData.ack = lastSentAck + 1;
-    clientData.size = dataSize;
+    clientData.seq = (uint32_t)clientSeq;
+    clientData.ack = (uint32_t)lastSentAck;
+    clientData.size = (uint16_t)dataSize;
     memcpy(clientData.data, inputBuff, dataSize);
     
     int sent = sendto(sockfd, &clientData, sizeof(clientData), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress));
@@ -70,12 +72,14 @@ void sendData(int sockfd, struct sockaddr_in serverAddress, char inputBuff[1024]
     if(sent != -1){
         clientSeq++;
         // cout << "Sent message" << endl;
+        // cout << "RECV " << clientData.seq << " ACK " << clientData.ack << endl;
         return;
     }
     // cout << "didnt send message" << endl;
     
 }
 void processData(int sockfd, struct sockaddr_in serverAddress,packet* serverPacket, int &lastSentACK, int &lastRecAck,map<uint32_t, packet> &bufferedPackets) {
+    // cout << "RECV " << serverPacket->seq << " ACK " << serverPacket->ack << endl;
      if(serverPacket->seq == 0){
         lastRecAck = serverPacket->ack;
         return;

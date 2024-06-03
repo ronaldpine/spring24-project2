@@ -32,7 +32,6 @@ void cleanup(int sockfd) {
 }
 
 void dumpMessage(packet* clientPacket) {
-
     if(clientPacket->seq == 0){
         // cout << "Ack rec for: " << clientPacket->ack << endl;
         return;
@@ -48,18 +47,19 @@ void sendAck(int sockfd, struct sockaddr_in clientAddress, int &lastSentAck) {
     // return;
     // lastSentAck++;
     packet ACK = {0};
-    ACK.ack = (uint32_t)lastSentAck + 1;
+    ACK.ack = (uint32_t)lastSentAck;
     int sent = sendto(sockfd, &ACK, sizeof(ACK), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
     if(sent != -1){
         // cout << "sent ack" << endl;
+        // cout << "SEND " << ACK.seq << " ACK " << ACK.ack << endl;
     }
 }
 
 void sendData(int sockfd, struct sockaddr_in clientAddress, char inputBuff[1024], int dataSize, int &serverSeq, int lastSentAck) {
     packet serverData = {0};
-    serverData.seq = serverSeq;
-    serverData.ack = lastSentAck + 1;
-    serverData.size = dataSize;
+    serverData.seq = (uint32_t) serverSeq;
+    serverData.ack = (uint32_t) lastSentAck;
+    serverData.size = (uint16_t) dataSize;
     memcpy(serverData.data, inputBuff, dataSize);
 
     int sent = sendto(sockfd, &serverData, sizeof(serverData), 0, (struct sockaddr*)&clientAddress, sizeof(clientAddress));
@@ -73,7 +73,9 @@ void sendData(int sockfd, struct sockaddr_in clientAddress, char inputBuff[1024]
 }
 
 void processData(int sockfd, struct sockaddr_in clientAddress, packet* clientPacket, int &lastSentACK, int &lastRecAck, map<uint32_t, packet> &bufferedPackets) {
+    // cout <<"Processing data" << endl;
     //If there is an ack packet
+    // cout << "RECV " << clientPacket->seq << " ACK " << clientPacket->ack << endl;
     if(clientPacket->seq == 0){
         lastRecAck = clientPacket->ack;
         return;
