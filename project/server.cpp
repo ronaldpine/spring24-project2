@@ -38,9 +38,7 @@ void dumpMessage(packet* clientPacket) {
         return;
     }
 
-    for (int i = 0; i < clientPacket->size; i++) {
-        cout << clientPacket->data[i];
-    }
+    write(STDOUT_FILENO, clientPacket->data, clientPacket->size);
     // cout << " , packet number: " << clientPacket->seq << endl;
     // cout << " , ack number: " << clientPacket->ack << endl;
     cout.flush();
@@ -120,7 +118,7 @@ void sig(int signal) {
 
 int main(int argc, char *argv[]) {
     if (argc != 5) {
-        cout << "Not enough commands " << endl;
+        // cout << "Not enough commands " << endl;
         return -1;
     }
 
@@ -190,7 +188,7 @@ int main(int argc, char *argv[]) {
         // If there is data written to stdin, format a packet if we know client address
         if (messageBytes > 0) {
             // Add null character to the message/bytes from stdin
-            inputBuff[messageBytes] = '\0';
+            // inputBuff[messageBytes] = '\0';
             // cout << "Rec data from stdin" << endl;
             // Send Packet with stdin data
             sendData(sockfd, clientAddress, inputBuff, messageBytes, serverSeq, lastSentACK);

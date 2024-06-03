@@ -29,7 +29,7 @@ typedef struct __attribute__((__packed__)) {
 
 void cleanup(int sockfd) {
     close(sockfd);
-    cout.flush();
+    // cout.flush();
 }
 
 void dumpMessage(packet* serverPacket) {
@@ -40,12 +40,9 @@ void dumpMessage(packet* serverPacket) {
         return;
     }
 
-   for(int i = 0; i < serverPacket->size; i++){
-    cout << serverPacket->data[i];
-   }
+    write(STDOUT_FILENO, serverPacket->data, serverPacket->size);
 //    cout << " , packet number: " << serverPacket->seq << endl;
 //    cout << "Ack: " << serverPacket->ack << endl;
-   cout.flush();
 }
 
 void sendAck(int sockfd, struct sockaddr_in serverAddress, int &lastSentAck) {
@@ -56,7 +53,7 @@ void sendAck(int sockfd, struct sockaddr_in serverAddress, int &lastSentAck) {
         // cout << "sent ack" << endl;
     }
     else{
-        cout << errno << endl;
+        // cout << errno << endl;
     }
 }
 
@@ -124,7 +121,7 @@ void sig(int signal) {
 
 int main(int argc, char *argv[]) {
     if (argc != 5) {
-        cout << "not enough arguments for client" << endl;
+        // cout << "not enough arguments for client" << endl;
         return -1;
     }
 
@@ -188,7 +185,7 @@ int main(int argc, char *argv[]) {
 
         // If there is data written to stdin, format a packet
         if(messageBytes > 0){
-            inputBuff[messageBytes] = '\0';
+            // inputBuff[messageBytes] = '\0';
             // cout << "Rec data from stdin" << endl;
             // Send Packet with stdin data
             sendData(sockfd, serverAddress, inputBuff, messageBytes, clientSeq, lastSentACK);

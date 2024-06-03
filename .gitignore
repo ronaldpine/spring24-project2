@@ -4,3 +4,5 @@
 *.dSYM
 /project/server
 /project/client
+
+./Makefile 
