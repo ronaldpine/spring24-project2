@@ -1,0 +1,22 @@
+[1m
+What's Next?
+[0m  1. Sign in to your Docker account → [36mdocker login[0m
+  2. View a summary of image vulnerabilities and recommendations → [36mdocker scout quickview eado0/reliability-is-essential[0m
+WARNING: The requested image's platform (linux/amd64) does not match the detected host platform (linux/arm64/v8) and no specific platform was requested
+Traceback (most recent call last):
+  File "/autograder/source/grader.py", line 76, in <module>
+    main()
+  File "/autograder/source/grader.py", line 47, in main
+    make.run()
+  File "/autograder/source/tests.py", line 23, in run
+    subprocess.run(['make', '-C', 'project'],
+  File "/usr/lib/python3.10/subprocess.py", line 505, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+  File "/usr/lib/python3.10/subprocess.py", line 1154, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+  File "/usr/lib/python3.10/subprocess.py", line 2021, in _communicate
+    ready = selector.select(timeout)
+  File "/usr/lib/python3.10/selectors.py", line 416, in select
+    fd_event_list = self._selector.poll(timeout)
+KeyboardInterrupt
+make: *** [run] Error 130
