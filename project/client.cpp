@@ -252,6 +252,19 @@ void send_ack(int sockfd, struct sockaddr* dest_addr, socklen_t addrlen, uint32_
 
 using namespace std;
 
+// client.cpp
+#include <iostream>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <csignal>
+#include <fcntl.h>
+#include <map>
+// #include "common.h"
+
+using namespace std;
+
 int sockfd;
 volatile sig_atomic_t running = 1;
 
@@ -306,10 +319,9 @@ int main(int argc, char* argv[]) {
             packet_to_host_order(pkt);
 
             if (pkt->seq == 0) {  // ACK packet
-                // uint32_t ack = pkt->ack;
-                // for (auto it = outgoing_packets.begin(); it != outgoing_packets.end() && it->first <= ack; it = outgoing_packets.erase(it));
-            } 
-            else {
+                uint32_t ack = pkt->ack;
+                for (auto it = outgoing_packets.begin(); it != outgoing_packets.end() && it->first <= ack; it = outgoing_packets.erase(it));
+            } else {
                 incoming_packets[pkt->seq] = *pkt;
                 send_ack(sockfd, (struct sockaddr*)&server_addr, addrlen, pkt->seq);
 
@@ -322,14 +334,14 @@ int main(int argc, char* argv[]) {
         }
 
         // Handle retransmission (simplified for brevity)
-        // if (!outgoing_packets.empty()) {
-        //     static time_t last_send = time(NULL);
-        //     if (time(NULL) - last_send >= RTO) {
-        //         auto it = outgoing_packets.begin();
-        //         sendto(sockfd, &it->second, HEADER_SIZE + it->second.size, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
-        //         last_send = time(NULL);
-        //     }
-        // }
+        if (!outgoing_packets.empty()) {
+            static time_t last_send = time(NULL);
+            if (time(NULL) - last_send >= RTO) {
+                auto it = outgoing_packets.begin();
+                sendto(sockfd, &it->second, HEADER_SIZE + it->second.size, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+                last_send = time(NULL);
+            }
+        }
     }
 
     return 0;

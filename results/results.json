@@ -7,11 +7,11 @@
             "visibility": "visible"
         },
         {
-            "status": "failed",
+            "status": "passed",
             "name": "ASCII transfer (self)",
-            "output": "server -> client transfer failed",
+            "output": "Transfer successful",
             "visibility": "visible",
-            "score": 0,
+            "score": 5,
             "max_score": 5
         },
         {
@@ -65,7 +65,7 @@
         {
             "status": "failed",
             "name": "Binary transfer (reference client->server, packet reordering)",
-            "output": "server -> client transfer failed",
+            "output": "client -> server transfer failed",
             "visibility": "visible",
             "score": 0,
             "max_score": 5
@@ -111,11 +111,11 @@
             "max_score": 15
         },
         {
-            "name": "Total points: 10/100",
+            "name": "Total points: 15/100",
             "status": "passed",
             "visibility": "visible"
         }
     ],
-    "score": 10,
+    "score": 15,
     "visibility": "visible"
 }

@@ -223,6 +223,7 @@
 
 
 // server.cpp
+// server.cpp
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -230,6 +231,8 @@
 #include <csignal>
 #include <fcntl.h>
 #include <map>
+// common.h
+// #pragma once
 #include <arpa/inet.h>
 #include <cstring>
 
@@ -297,54 +300,45 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, handle_signal);
 
     uint32_t next_seq = 1, last_ack = 0;
-    map<uint32_t, Packet> incoming_packets;
-int connected = 0;
-    char buf[PACKET_SIZE];
-    int buf_size = 0;
+    map<uint32_t, Packet> outgoing_packets;
 
     while (running) {
-        int n = read(STDIN_FILENO, buf + buf_size, MSS - buf_size);
-        if (n > 0) {
-            buf_size += n;
-        }
-
-        while (buf_size > 0 && connected) {
+        char buf[PACKET_SIZE];
+        int n = read(STDIN_FILENO, buf, MSS);
+        if (n > 0 ) {
             Packet pkt = {0};
             pkt.seq = next_seq++;
             pkt.ack = last_ack;
-            pkt.size = min(buf_size, MSS);
-            memcpy(pkt.data, buf, pkt.size);
+            pkt.size = n;
+            memcpy(pkt.data, buf, n);
             packet_to_network_order(&pkt);
-            sendto(sockfd, &pkt, HEADER_SIZE + pkt.size, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
-
-            memmove(buf, buf + pkt.size, buf_size - pkt.size);
-            buf_size -= pkt.size;
+            outgoing_packets[pkt.seq] = pkt;
+            sendto(sockfd, &pkt, HEADER_SIZE + n, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
         }
 
         socklen_t addrlen = sizeof(client_addr);
         n = recvfrom(sockfd, buf, PACKET_SIZE, 0, (struct sockaddr*)&client_addr, &addrlen);
-
-        if (n > 0 && connected) {
-            connected = 1;
+        if (n > 0) {
             Packet* pkt = (Packet*)buf;
             packet_to_host_order(pkt);
 
             if (pkt->seq == 0) {  // ACK packet
                 uint32_t ack = pkt->ack;
-                auto it = incoming_packets.begin();
-                while (it != incoming_packets.end() && it->first <= ack) {
-                    it = incoming_packets.erase(it);
-                }
-            } else {
-                incoming_packets[pkt->seq] = *pkt;
-                send_ack(sockfd, (struct sockaddr*)&client_addr, addrlen, pkt->seq);
+                for (auto it = outgoing_packets.begin(); it != outgoing_packets.end() && it->first <= ack; it = outgoing_packets.erase(it));
+            } else if (pkt->seq == last_ack + 1) {
+                write(STDOUT_FILENO, pkt->data, pkt->size);
+                last_ack = pkt->seq;
+                send_ack(sockfd, (struct sockaddr*)&client_addr, addrlen, last_ack);
+            }
+        }
 
-                while (incoming_packets.count(last_ack + 1) > 0) {
-                    last_ack++;
-                    const auto& pkt = incoming_packets[last_ack];
-                    write(STDOUT_FILENO, pkt.data, pkt.size);
-                    incoming_packets.erase(last_ack);
-                }
+        // Handle retransmission (simplified for brevity)
+        if (!outgoing_packets.empty()) {
+            static time_t last_send = time(NULL);
+            if (time(NULL) - last_send >= RTO) {
+                auto it = outgoing_packets.begin();
+                sendto(sockfd, &it->second, HEADER_SIZE + it->second.size, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+                last_send = time(NULL);
             }
         }
     }
