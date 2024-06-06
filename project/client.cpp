@@ -1,4 +1,3 @@
-// client.cpp
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -29,22 +28,22 @@ struct __attribute__((__packed__)) Packet {
     uint8_t data[MSS];
 };
 
-void packet_to_network_order(Packet* pkt) {
+void littleToBigEndian(Packet* pkt) {
     pkt->seq = htonl(pkt->seq);
     pkt->ack = htonl(pkt->ack);
     pkt->size = htons(pkt->size);
 }
 
-void packet_to_host_order(Packet* pkt) {
+void bigToLittleEnd(Packet* pkt) {
     pkt->seq = ntohl(pkt->seq);
     pkt->ack = ntohl(pkt->ack);
     pkt->size = ntohs(pkt->size);
 }
 
 void send_ack(int sockfd, struct sockaddr* dest_addr, socklen_t addrlen, uint32_t ack_num) {
-    Packet ack_pkt = {0};
-    ack_pkt.ack = htonl(ack_num);
-    sendto(sockfd, &ack_pkt, HEADER_SIZE, 0, dest_addr, addrlen);
+    Packet pkt = {0};
+    pkt.ack = htonl(ack_num);
+    sendto(sockfd, &pkt, HEADER_SIZE, 0, dest_addr, addrlen);
 }
 
 void handle_signal(int) {
@@ -55,53 +54,89 @@ void handle_signal(int) {
 
 int main(int argc, char* argv[]) {
     if (argc != 5) {
-        cerr << "Usage: client <flag> <hostname> <port> <ca_public_key_file>" << endl;
+        cerr << "Incorrect client args" << endl;
         return 1;
     }
 
-    int security_flag = stoi(argv[1]);
+    // Parse the port,security flags, and port
+    int security = stoi(argv[1]);
     const char* hostname = argv[2];
-    int port = stoi(argv[3]);
+    int PORT = stoi(argv[3]);
 
+    // Make a socket
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in server_addr = {0};
     server_addr.sin_family = AF_INET;
     inet_pton(AF_INET, hostname, &server_addr.sin_addr);
-    server_addr.sin_port = htons(port);
+    server_addr.sin_port = htons(PORT);
 
-    fcntl(sockfd, F_SETFL, O_NONBLOCK);
-    fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);
+    // Make stdin and socket non blocking
+    int flags = fcntl(sockfd, F_GETFL);
+    flags |= O_NONBLOCK;
+    fcntl(sockfd, F_SETFL, flags);
+    fcntl(STDIN_FILENO, F_SETFL, flags);
+ 
+    
     signal(SIGINT, handle_signal);
 
-    uint32_t next_seq = 1, last_ack = 0;
+    // Used to keep track of packets
+    uint32_t seq = 1;
+    uint32_t last_ack = 0;
     map<uint32_t, Packet> outgoing_packets;
     map<uint32_t, Packet> incoming_packets;
 
     while (running) {
-        char buf[PACKET_SIZE];
-        int n = read(STDIN_FILENO, buf, MSS);
+        
+        // Buffer for client packets
+        char serverBuf[PACKET_SIZE];
+        
+        // Buffer for std input
+        char inputBuf[MSS];
+
+
+        // read from stdin
+        int n = read(STDIN_FILENO, inputBuf, MSS);
         if (n > 0) {
+            
+            // Format into a packet and send
             Packet pkt = {0};
-            pkt.seq = next_seq++;
+            pkt.seq = seq;
             pkt.ack = last_ack;
             pkt.size = n;
-            memcpy(pkt.data, buf, n);
-            packet_to_network_order(&pkt);
+            memcpy(pkt.data, inputBuf, n);
+
+            // Convert to big endian
+            littleToBigEndian(&pkt);
+
+            // Store the packet in case of retransmission
             outgoing_packets[pkt.seq] = pkt;
+
+            // Send the Packet
             sendto(sockfd, &pkt, HEADER_SIZE + n, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+            
+            // Increase seq
+            seq++;
         }
 
         socklen_t addrlen = sizeof(server_addr);
-        n = recvfrom(sockfd, buf, PACKET_SIZE, 0, (struct sockaddr*)&server_addr, &addrlen);
+        n = recvfrom(sockfd, serverBuf, PACKET_SIZE, 0, (struct sockaddr*)&server_addr, &addrlen);
         if (n > 0) {
-            Packet* pkt = (Packet*)buf;
-            packet_to_host_order(pkt);
+            Packet* pkt = (Packet*)serverBuf;
+            bigToLittleEnd(pkt);
 
-            if (pkt->seq == 0) {  // ACK packet
+            // If this is purely an ACK packet
+            if (pkt->seq == 0) {  
                 uint32_t ack = pkt->ack;
                 for (auto it = outgoing_packets.begin(); it != outgoing_packets.end() && it->first <= ack; it = outgoing_packets.erase(it));
-            } else {
+            } 
+
+            // Else if the packet also contains data
+            else {
+
+                // Store the incoming packet if it is out of order
                 incoming_packets[pkt->seq] = *pkt;
+
+                //  Send an ack 
                 send_ack(sockfd, (struct sockaddr*)&server_addr, addrlen, pkt->seq);
 
                 while (incoming_packets.count(last_ack + 1) > 0) {
@@ -112,15 +147,8 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Handle retransmission (simplified for brevity)
-        if (!outgoing_packets.empty()) {
-            static time_t last_send = time(NULL);
-            if (time(NULL) - last_send >= RTO) {
-                auto it = outgoing_packets.begin();
-                sendto(sockfd, &it->second, HEADER_SIZE + it->second.size, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
-                last_send = time(NULL);
-            }
-        }
+        // Check for Retransmission
+     
     }
 
     return 0;
